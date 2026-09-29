@@ -106,3 +106,35 @@ class LoginTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertNotIn("access_token", response.cookies)
         self.assertNotIn("refresh_token", response.cookies)
+
+    def test_login_with_missing_field_returns_400(self):
+        for missing_field in ("username", "password"):
+            with self.subTest(missing_field=missing_field):
+                invalid_login_data = self.login_data.copy()
+                del invalid_login_data[missing_field]
+
+                response = self.client.post(self.url, invalid_login_data, format="json")
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertNotIn("access_token", response.cookies)
+                self.assertNotIn("refresh_token", response.cookies)
+
+    def test_login_with_get_returns_405(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_protected_endpoint_is_accessible_after_login(self):
+        protected_url = reverse("quiz-list")
+
+        self.assertEqual(
+            self.client.get(protected_url).status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+        self.client.post(self.url, self.login_data, format="json")
+
+        self.assertEqual(
+            self.client.get(protected_url).status_code,
+            status.HTTP_200_OK,
+        )
