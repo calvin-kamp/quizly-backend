@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:17
-    container_name: django-starter-db
+    container_name: quizly-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -17,7 +17,7 @@ services:
 
   api:
     build: .
-    container_name: django-starter-api
+    container_name: quizly-api
     restart: unless-stopped
     env_file: .env
     ports:
