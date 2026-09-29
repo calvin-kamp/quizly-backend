@@ -82,12 +82,18 @@ class LogoutView(TokenBlacklistView):
             {
                 "detail": "Log-Out successfully! All Tokens will be deleted. Refresh token is now invalid.",
             },
-            status=status.HTTP_204_NO_CONTENT,
+            status=status.HTTP_200_OK,
         )
 
-        response.delete_cookie(key="refresh_token")
+        response.delete_cookie(
+            key="refresh_token",
+            samesite=settings.AUTH_COOKIE["SAMESITE"],
+        )
 
-        response.delete_cookie(key="access_token")
+        response.delete_cookie(
+            key="access_token",
+            samesite=settings.AUTH_COOKIE["SAMESITE"],
+        )
 
         return response
 
