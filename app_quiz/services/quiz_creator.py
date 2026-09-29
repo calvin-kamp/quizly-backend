@@ -1,3 +1,5 @@
+"""Creation of a quiz from a YouTube URL."""
+
 import os
 import shutil
 
@@ -11,6 +13,24 @@ from .youtube import download_audio
 
 
 def create_quiz_from_url(owner, url: str) -> Quiz:
+    """Create and save a quiz for a YouTube video.
+
+    Downloads the audio, transcribes it and deletes the temporary audio file.
+    Gemini then generates the questions, and the quiz is saved together with
+    them in one transaction.
+
+    Args:
+        owner: The user who owns the new quiz.
+        url: URL of the YouTube video.
+
+    Returns:
+        The saved quiz.
+
+    Raises:
+        yt_dlp.utils.DownloadError: If the video cannot be downloaded.
+        json.JSONDecodeError: If Gemini does not return valid JSON.
+        KeyError: If the answer of Gemini misses a required field.
+    """
     audio_path = download_audio(url)
 
     try:

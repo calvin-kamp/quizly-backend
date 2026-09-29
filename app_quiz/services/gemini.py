@@ -1,3 +1,5 @@
+"""Generation of quiz questions with the Gemini API."""
+
 import json
 
 from google import genai
@@ -32,6 +34,20 @@ PROMPT = """
 
 
 def generate_quiz(transcript: str) -> dict:
+    """Generate a quiz with 10 questions from a transcript.
+
+    The API key is read from the environment variable ``GEMINI_API_KEY``.
+
+    Args:
+        transcript: Text of the video.
+
+    Returns:
+        Dictionary with ``title``, ``description`` and ``questions``. Each
+        question has ``question_title``, ``question_options`` and ``answer``.
+
+    Raises:
+        json.JSONDecodeError: If the answer of Gemini is not valid JSON.
+    """
     client = genai.Client()
 
     interaction = client.interactions.create(
