@@ -1,3 +1,9 @@
+"""Views for registration, login, logout and token refresh.
+
+The JWT are sent in ``HttpOnly`` cookies named ``access_token`` and
+``refresh_token``.
+"""
+
 from django.conf import settings
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -15,10 +21,13 @@ from .serializers import LoginSerializer, RegisterSerializer
 
 
 class RegisterView(APIView):
+    """Create a new user account. Public endpoint."""
+
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def post(self, request):
+        """Register a user. Answers 201, or 400 for invalid data."""
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -32,9 +41,16 @@ class RegisterView(APIView):
 
 
 class LoginView(TokenObtainPairView):
+    """Log in and set the ``access_token`` and ``refresh_token`` cookies."""
+
     serializer_class = LoginSerializer
 
     def post(self, request, *args, **kwargs):
+        """Authenticate the user and store both tokens in cookies.
+
+        The tokens are removed from the response body, which only contains
+        ``detail`` and ``user``. Answers 401 for wrong credentials.
+        """
         response = super().post(request, *args, **kwargs)
 
         refresh_token = response.data.get("refresh")
@@ -67,7 +83,14 @@ class LoginView(TokenObtainPairView):
 
 
 class LogoutView(TokenBlacklistView):
+    """Log out: invalidate the refresh token and delete both cookies."""
+
     def post(self, request: Request, *args, **kwargs):
+        """Blacklist the refresh token from the cookie and delete the cookies.
+
+        Always answers 200, also when there are no cookies or the token is
+        already invalid.
+        """
         refresh_token = request.COOKIES.get("refresh_token")
 
         if refresh_token:
@@ -99,7 +122,15 @@ class LogoutView(TokenBlacklistView):
 
 
 class CookieTokenRefreshView(TokenRefreshView):
+    """Issue a new access token based on the ``refresh_token`` cookie."""
+
     def post(self, request: Request, *args, **kwargs):
+        """Validate the refresh cookie and set a new ``access_token`` cookie.
+
+        Raises:
+            InvalidToken: If the refresh cookie is missing, expired or invalid
+                (answers 401).
+        """
         refresh_token = request.COOKIES.get("refresh_token")
 
         if not refresh_token:
