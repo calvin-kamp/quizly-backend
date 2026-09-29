@@ -12,8 +12,8 @@ class Quiz(models.Model):
         title: Title generated from the transcript.
         description: Short summary of the video (up to 150 characters).
         video_url: URL of the YouTube video.
-        created_at: Time of creation.
         updated_at: Time of the last change.
+        created_at: Time of creation.
     """
 
     owner = models.ForeignKey(
@@ -24,8 +24,8 @@ class Quiz(models.Model):
     title = models.CharField(max_length=255)
     description = models.CharField(max_length=255, blank=True)
     video_url = models.URLField()
-    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -43,8 +43,8 @@ class Question(models.Model):
         question_title: The text of the question.
         question_options: List with the answer options.
         answer: The correct answer, one of the options.
-        created_at: Time of creation.
         updated_at: Time of the last change.
+        created_at: Time of creation.
     """
 
     quiz = models.ForeignKey(
@@ -55,8 +55,8 @@ class Question(models.Model):
     question_title = models.CharField(max_length=500)
     question_options = models.JSONField()
     answer = models.CharField(max_length=255)
-    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["id"]
