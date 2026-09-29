@@ -29,6 +29,7 @@ Django REST Framework API; a client application talks to it over HTTP.
 - [Authentication](#authentication)
 - [Permissions](#permissions)
 - [API reference](#api-reference)
+- [Tests](#tests)
 - [Troubleshooting](#troubleshooting)
 - [License](#license)
 
@@ -41,8 +42,9 @@ a [Gemini API key](https://aistudio.google.com/apikey). Python does not have to
 be installed on your machine.
 
 The first build takes a while: the image contains PyTorch, and the Whisper model
-(about 1.5 GB) is downloaded on the first quiz request. Whisper needs several GB
-of memory while it transcribes.
+(about 460 MB, model `small`) is downloaded during the build, so the first quiz
+request does not have to fetch it. Whisper needs about 2 GB of memory while it
+transcribes.
 
 Every command is run from the project root, the folder that contains
 `manage.py`.
@@ -151,7 +153,7 @@ docker compose -f compose.yaml up -d --build
 ```
 
 The `-f compose.yaml` flag skips the override file. The container then runs
-gunicorn with a request timeout of 300 seconds and collects the static files on
+gunicorn with a request timeout of 600 seconds and collects the static files on
 start. Before deploying, set in `.env`:
 
 - `DEBUG=False`
@@ -173,10 +175,13 @@ docker compose exec api python manage.py migrate
 # Open a Django shell
 docker compose exec api python manage.py shell
 
+# Run the tests
+docker compose exec api python manage.py test
+
 # Stop the containers
 docker compose down
 
-# Stop the containers and delete the database and the Whisper model cache
+# Stop the containers and delete the database
 docker compose down -v
 ```
 
@@ -208,6 +213,9 @@ core/          Project configuration and root URLs
 app_auth/      Registration, login, logout and token refresh
 app_quiz/      Quizzes, questions and the quiz generation
 ```
+
+Both apps have a `tests/` package with the automated tests (see
+[Tests](#tests)).
 
 Each app keeps its API layer in a subpackage (`api/`) holding the serializers,
 views, permissions and URLs. `app_auth/api/authentication.py` reads the token
@@ -477,6 +485,46 @@ unknown id.
 
 ---
 
+## Tests
+
+The tests use Django's test runner and the `APITestCase` of Django REST
+Framework. Run them with the stack running (`docker compose up`), because the
+tests need the database container:
+
+```bash
+docker compose exec api python manage.py test
+```
+
+Django creates a separate test database for the run and deletes it afterwards,
+so your data is not touched. The download, Whisper and Gemini are replaced in
+the tests, so they need no network access, use no Gemini quota and run quickly.
+
+To run only a part, pass a module or a single test:
+
+```bash
+# One app
+docker compose exec api python manage.py test app_auth
+
+# One file
+docker compose exec api python manage.py test app_quiz.tests.test_quiz_detail
+
+# One test
+docker compose exec api python manage.py test app_auth.tests.test_login.LoginTests.test_login_sets_auth_cookies
+```
+
+| File                                 | Covers                                                                                       |
+| ------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `app_auth/tests/test_register.py`    | Registration: valid data, hashed password, duplicate username or email, weak password, missing fields |
+| `app_auth/tests/test_login.py`       | Login: cookies (set, `HttpOnly`, lifetime), no tokens in the body, wrong or missing credentials, inactive user, access to a protected endpoint |
+| `app_auth/tests/test_logout.py`      | Logout: cookies are deleted, the refresh token is blacklisted, works without cookies         |
+| `app_auth/tests/test_token_refresh.py` | Token refresh: new access cookie, missing or invalid refresh cookie                        |
+| `app_quiz/tests/test_quiz_create.py` | Quiz creation: result and questions, invalid URL, failed download, login required            |
+| `app_quiz/tests/test_quiz_list.py`   | Quiz list: only the quizzes of the logged-in user                                            |
+| `app_quiz/tests/test_quiz_detail.py` | Reading, changing and deleting a quiz, including the owner check (403) and the 404 case      |
+| `app_quiz/tests/test_quiz_creator.py`| The quiz pipeline: saved data, cleanup of the audio file, errors leave nothing behind        |
+
+---
+
 ## Troubleshooting
 
 **`django.core.exceptions.ImproperlyConfigured: Set the SECRET_KEY environment
@@ -513,15 +561,14 @@ port exactly. The requests also have to send credentials (`credentials:
 should run on the same site, for example both on `localhost` with different
 ports, because the cookies use `SameSite=Lax`.
 
-**Creating a quiz takes very long** — the first request downloads the Whisper
-model (about 1.5 GB) into the `whisper_cache` volume; this happens only once.
-The transcription runs on the CPU and is slow for long videos. For faster
-results use a smaller model: in `app_quiz/services/whisper.py` change
-`whisper.load_model("turbo")` to `"base"` or `"small"`. Smaller models transcribe
-less accurately.
+**Creating a quiz takes very long** — the transcription runs on the CPU and is
+slow for long videos. For faster results use a smaller model: in
+`app_quiz/services/whisper.py` and in the `Dockerfile` change `small` to `base`.
+Smaller models transcribe less accurately; a larger one such as `turbo` is more
+accurate but needs about 1.5 GB of download and several GB of memory.
 
 **The request ends with a timeout, or the log shows `Killed` or `WORKER ... was
-sent SIGKILL`** — gunicorn stops a request after 300 seconds (`--timeout` in the
+sent SIGKILL`** — gunicorn stops a request after 600 seconds (`--timeout` in the
 `Dockerfile`), so very long videos need a higher value. `Killed` means the
 container ran out of memory: give Docker more memory or use a smaller Whisper
 model.
