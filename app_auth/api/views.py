@@ -5,7 +5,11 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import (
+    TokenBlacklistView,
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 
 from .serializers import LoginSerializer, RegisterSerializer
 
@@ -58,6 +62,32 @@ class LoginView(TokenObtainPairView):
             "detail": "Login successfully!",
             "user": response.data.get("user"),
         }
+
+        return response
+
+
+class LogoutView(TokenBlacklistView):
+    def post(self, request: Request, *args, **kwargs):
+        refresh_token = request.COOKIES.get("refresh_token")
+
+        if refresh_token:
+            serializer = self.get_serializer(data={"refresh": refresh_token})
+
+            try:
+                serializer.is_valid(raise_exception=True)
+            except TokenError:
+                pass
+
+        response = Response(
+            {
+                "detail": "Log-Out successfully! All Tokens will be deleted. Refresh token is now invalid.",
+            },
+            status=status.HTTP_204_NO_CONTENT,
+        )
+
+        response.delete_cookie(key="refresh_token")
+
+        response.delete_cookie(key="access_token")
 
         return response
 
