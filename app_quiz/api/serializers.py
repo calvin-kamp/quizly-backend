@@ -22,17 +22,7 @@ class QuestionCreatedSerializer(QuestionSerializer):
     """A question as returned after creation, including its timestamps."""
 
     class Meta(QuestionSerializer.Meta):
-        fields = (
-            "id",
-            "title",
-            "description",
-            "created_at",
-            "updated_at",
-            "video_url",
-            "questions",
-            "created_at",
-            "updated_at",
-        )
+        fields = QuestionSerializer.Meta.fields + ("updated_at", "created_at")
 
 
 class QuizSerializer(serializers.ModelSerializer):
@@ -50,10 +40,10 @@ class QuizSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "description",
-            "created_at",
-            "updated_at",
             "video_url",
             "questions",
+            "updated_at",
+            "created_at",
         )
         read_only_fields = ("id", "created_at", "updated_at", "video_url")
 
