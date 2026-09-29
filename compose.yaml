@@ -22,12 +22,9 @@ services:
     env_file: .env
     ports:
       - "8000:8000"
-    volumes:
-      - whisper_cache:/root/.cache/whisper
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   postgres_data:
-  whisper_cache:
