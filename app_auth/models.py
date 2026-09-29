@@ -1,3 +1,1 @@
-from django.db import models
-
-# Create your models here.
+"""The project uses the user model of Django, so there are no models here."""

@@ -1,3 +1,1 @@
-from django.contrib import admin
-
-# Register your models here.
+"""The user model uses the admin of Django."""
