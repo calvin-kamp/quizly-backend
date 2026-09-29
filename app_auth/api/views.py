@@ -17,6 +17,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
+from ..utils import delete_auth_cookies, set_auth_cookie, set_login_cookies
 from .serializers import LoginSerializer, RegisterSerializer
 
 
@@ -52,31 +53,12 @@ class LoginView(TokenObtainPairView):
         ``detail`` and ``user``. Answers 401 for wrong credentials.
         """
         response = super().post(request, *args, **kwargs)
+        tokens = response.data
 
-        refresh_token = response.data.get("refresh")
-        access_token = response.data.get("access")
-
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            max_age=settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"],
-            secure=settings.AUTH_COOKIE["SECURE"],
-            httponly=True,
-            samesite=settings.AUTH_COOKIE["SAMESITE"],
-        )
-
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            max_age=settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"],
-            secure=settings.AUTH_COOKIE["SECURE"],
-            httponly=True,
-            samesite=settings.AUTH_COOKIE["SAMESITE"],
-        )
-
+        set_login_cookies(response, tokens)
         response.data = {
             "detail": "Login successfully!",
-            "user": response.data.get("user"),
+            "user": tokens.get("user"),
         }
 
         return response
@@ -91,34 +73,34 @@ class LogoutView(TokenBlacklistView):
         Always answers 200, also when there are no cookies or the token is
         already invalid.
         """
-        refresh_token = request.COOKIES.get("refresh_token")
-
-        if refresh_token:
-            serializer = self.get_serializer(data={"refresh": refresh_token})
-
-            try:
-                serializer.is_valid(raise_exception=True)
-            except TokenError:
-                pass
+        self._blacklist_refresh_cookie(request)
 
         response = Response(
             {
-                "detail": "Log-Out successfully! All Tokens will be deleted. Refresh token is now invalid.",
+                "detail": (
+                    "Log-Out successfully! All Tokens will be deleted. "
+                    "Refresh token is now invalid."
+                ),
             },
             status=status.HTTP_200_OK,
         )
-
-        response.delete_cookie(
-            key="refresh_token",
-            samesite=settings.AUTH_COOKIE["SAMESITE"],
-        )
-
-        response.delete_cookie(
-            key="access_token",
-            samesite=settings.AUTH_COOKIE["SAMESITE"],
-        )
+        delete_auth_cookies(response)
 
         return response
+
+    def _blacklist_refresh_cookie(self, request):
+        """Blacklist the token of the ``refresh_token`` cookie, if any."""
+        refresh_token = request.COOKIES.get("refresh_token")
+
+        if not refresh_token:
+            return
+
+        serializer = self.get_serializer(data={"refresh": refresh_token})
+
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError:
+            pass
 
 
 class CookieTokenRefreshView(TokenRefreshView):
@@ -131,6 +113,21 @@ class CookieTokenRefreshView(TokenRefreshView):
             InvalidToken: If the refresh cookie is missing, expired or invalid
                 (answers 401).
         """
+        response = Response(
+            {"detail": "Token refreshed"},
+            status=status.HTTP_200_OK,
+        )
+        set_auth_cookie(
+            response,
+            "access_token",
+            self._get_new_access_token(request),
+            settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"],
+        )
+
+        return response
+
+    def _get_new_access_token(self, request):
+        """Return a new access token for the refresh token in the cookie."""
         refresh_token = request.COOKIES.get("refresh_token")
 
         if not refresh_token:
@@ -143,22 +140,4 @@ class CookieTokenRefreshView(TokenRefreshView):
         except TokenError as e:
             raise InvalidToken(e.args[0]) from e
 
-        access_token = serializer.validated_data["access"]
-
-        response = Response(
-            {
-                "detail": "Token refreshed",
-            },
-            status=status.HTTP_200_OK,
-        )
-
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            max_age=settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"],
-            secure=settings.AUTH_COOKIE["SECURE"],
-            httponly=True,
-            samesite=settings.AUTH_COOKIE["SAMESITE"],
-        )
-
-        return response
+        return serializer.validated_data["access"]
