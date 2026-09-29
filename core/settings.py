@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -146,4 +147,16 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication"
     ],
+}
+
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "SIGNING_KEY": env("JWT_SIGNING_KEY", default=SECRET_KEY),
+}
+
+AUTH_COOKIE = {
+    "SAMESITE": "Lax",
+    "SECURE": env.bool("AUTH_COOKIE_SECURE", default=True),
 }
