@@ -21,7 +21,7 @@ Django REST Framework API; a client application talks to it over HTTP.
   - [3. Create the `.env` file](#3-create-the-env-file)
   - [4. Build and start the containers](#4-build-and-start-the-containers)
   - [5. Create an admin account](#5-create-an-admin-account)
-  - [6. Check that it works](#6-check-that-it-works)
+  - [6. Try the API](#6-try-the-api)
 - [Running in production](#running-in-production)
 - [Useful commands](#useful-commands)
 - [Environment variables](#environment-variables)
@@ -43,8 +43,9 @@ You need:
 - [Docker](https://docs.docker.com/get-docker/) with Docker Compose v2. The API
   and the PostgreSQL database run in containers.
 - [Python 3.13](https://www.python.org/downloads/) on your machine, for the
-  virtual environment and to generate the keys for the `.env` file. ffmpeg does
-  not have to be installed, it is part of the Docker image.
+  virtual environment and to generate the keys for the `.env` file.
+- ffmpeg is required, because Whisper needs it to read the audio. The Docker
+  image installs it, so you do not have to install it on your machine.
 - A [Gemini API key](https://aistudio.google.com/apikey).
 
 The first build takes a while: the image contains PyTorch, and the Whisper model
@@ -185,17 +186,75 @@ The API is now available at `http://localhost:8000/api/`.
 docker compose exec api python manage.py createsuperuser
 ```
 
-The account is reachable at `http://localhost:8000/admin/`.
+The account is reachable at `http://localhost:8000/admin/`. In the admin panel
+you can edit the users, the quizzes and the single questions of a quiz. New
+quizzes are created with the API, see the next step.
 
-### 6. Check that it works
+### 6. Try the API
+
+Start with a registration, log in and create a quiz from a YouTube video. The
+login sets the tokens as cookies, so the following requests have to reuse them:
+PowerShell keeps them in a session variable, curl in a cookie file. Postman
+works as well and stores the cookies by itself.
+
+**Windows (PowerShell)**
+
+Use `Invoke-RestMethod`. The `curl` command of PowerShell is something else and
+does not accept the bash examples.
+
+```powershell
+# 1. Register
+$register = @{
+    username           = "demo"
+    email              = "demo@example.com"
+    password           = "S3cure-Passw0rd!"
+    confirmed_password = "S3cure-Passw0rd!"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://localhost:8000/api/register/" -Method Post -ContentType "application/json" -Body $register
+
+# 2. Log in; the cookies are stored in $session
+$login = @{ username = "demo"; password = "S3cure-Passw0rd!" } | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://localhost:8000/api/login/" -Method Post -ContentType "application/json" -Body $login -SessionVariable session
+
+# 3. Create a quiz (takes a few minutes, the command waits until it is done)
+$quiz = @{ url = "https://www.youtube.com/watch?v=vu3xGr-lNVI" } | ConvertTo-Json
+
+$result = Invoke-RestMethod -Uri "http://localhost:8000/api/quizzes/" -Method Post -ContentType "application/json" -Body $quiz -WebSession $session -TimeoutSec 900
+
+$result | ConvertTo-Json -Depth 5
+
+# 4. List all quizzes of the user
+Invoke-RestMethod -Uri "http://localhost:8000/api/quizzes/" -WebSession $session | ConvertTo-Json -Depth 5
+```
+
+**macOS / Linux**
 
 ```bash
+# 1. Register
 curl -X POST http://localhost:8000/api/register/ \
   -H "Content-Type: application/json" \
   -d '{"username": "demo", "email": "demo@example.com", "password": "S3cure-Passw0rd!", "confirmed_password": "S3cure-Passw0rd!"}'
+
+# 2. Log in; the cookies are stored in cookies.txt
+curl -c cookies.txt -X POST http://localhost:8000/api/login/ \
+  -H "Content-Type: application/json" \
+  -d '{"username": "demo", "password": "S3cure-Passw0rd!"}'
+
+# 3. Create a quiz (takes a few minutes, the command waits until it is done)
+curl -b cookies.txt -X POST http://localhost:8000/api/quizzes/ \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.youtube.com/watch?v=vu3xGr-lNVI"}'
+
+# 4. List all quizzes of the user
+curl -b cookies.txt http://localhost:8000/api/quizzes/
 ```
 
-Expected response: `{"detail":"User created successfully!"}`
+Expected response of the registration: `{"detail":"User created successfully!"}`.
+The registration only works once per username; use another username for a second
+run. The login response contains no tokens, they are only in the cookies. All
+endpoints are described in the [API reference](#api-reference).
 
 ---
 
@@ -272,7 +331,8 @@ Both apps have a `tests/` package with the automated tests (see
 
 Each app keeps its API layer in a subpackage (`api/`) holding the serializers,
 views, permissions and URLs. `app_auth/api/authentication.py` reads the token
-from the cookie. `app_quiz/services/` holds the steps of the quiz generation:
+from the cookie, `app_auth/utils.py` sets and deletes the auth cookies. The
+models of `app_quiz` are managed in the admin panel (`app_quiz/admin.py`). `app_quiz/services/` holds the steps of the quiz generation:
 
 ```
 services/
@@ -327,7 +387,8 @@ Four endpoints work without a valid access token: `POST /api/register/`,
 needs the refresh cookie). Everything else answers `401` without a valid access
 token.
 
-Postman keeps the cookies after the login. With curl, use a cookie file:
+Postman keeps the cookies after the login. With curl (macOS / Linux), use a
+cookie file; for PowerShell see [6. Try the API](#6-try-the-api):
 
 ```bash
 curl -c cookies.txt -X POST http://localhost:8000/api/login/ \
@@ -575,6 +636,7 @@ docker compose exec api python manage.py test app_auth.tests.test_login.LoginTes
 | `app_quiz/tests/test_quiz_list.py`   | Quiz list: only the quizzes of the logged-in user                                            |
 | `app_quiz/tests/test_quiz_detail.py` | Reading, changing and deleting a quiz, including the owner check (403) and the 404 case      |
 | `app_quiz/tests/test_quiz_creator.py`| The quiz pipeline: saved data, cleanup of the audio file, errors leave nothing behind        |
+| `app_quiz/tests/test_admin.py`       | Admin panel: quizzes and questions are listed and can be changed, questions appear on the quiz page |
 
 ---
 
