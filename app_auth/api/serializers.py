@@ -1,36 +1,38 @@
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
+
+User = get_user_model()
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    repeated_password = serializers.CharField(write_only=True)
+    confirmed_password = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
-        fields = ["username", "email", "password", "repeated_password"]
-        extra_kwargs = {"password": {"write_only": True}, "email": {"required": True}}
-
-    def validate_repeated_password(self, value):
-        password = self.initial_data.get("password")
-        if password and value and password != value:
-            raise serializers.ValidationError("Passwords do not match")
-
-        return value
+        fields = ["username", "email", "password", "confirmed_password"]
+        extra_kwargs = {
+            "password": {"write_only": True},
+            "email": {"required": True},
+        }
 
     def validate_email(self, value):
-        if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("Email already exists")
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("Email already exists.")
 
         return value
 
-    def save(self):
-        pw = self.validated_data["password"]
+    def validate(self, data):
+        if data["password"] != data["confirmed_password"]:
+            raise serializers.ValidationError(
+                {"confirmed_password": "Passwords do not match."}
+            )
 
-        account = User(
-            email=self.validated_data["email"], username=self.validated_data["username"]
-        )
+        validate_password(data["password"])
 
-        account.set_password(pw)
-        account.save()
+        return data
 
-        return account
+    def create(self, validated_data):
+        validated_data.pop("confirmed_password")
+
+        return User.objects.create_user(**validated_data)
