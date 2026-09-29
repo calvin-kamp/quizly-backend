@@ -17,10 +17,11 @@ Django REST Framework API; a client application talks to it over HTTP.
 
 - [Setup](#setup)
   - [1. Get the code](#1-get-the-code)
-  - [2. Create the `.env` file](#2-create-the-env-file)
-  - [3. Build and start the containers](#3-build-and-start-the-containers)
-  - [4. Create an admin account](#4-create-an-admin-account)
-  - [5. Check that it works](#5-check-that-it-works)
+  - [2. Create the virtual environment](#2-create-the-virtual-environment)
+  - [3. Create the `.env` file](#3-create-the-env-file)
+  - [4. Build and start the containers](#4-build-and-start-the-containers)
+  - [5. Create an admin account](#5-create-an-admin-account)
+  - [6. Check that it works](#6-check-that-it-works)
 - [Running in production](#running-in-production)
 - [Useful commands](#useful-commands)
 - [Environment variables](#environment-variables)
@@ -37,9 +38,14 @@ Django REST Framework API; a client application talks to it over HTTP.
 
 ## Setup
 
-You need [Docker](https://docs.docker.com/get-docker/) with Docker Compose v2 and
-a [Gemini API key](https://aistudio.google.com/apikey). Python does not have to
-be installed on your machine.
+You need:
+
+- [Docker](https://docs.docker.com/get-docker/) with Docker Compose v2. The API
+  and the PostgreSQL database run in containers.
+- [Python 3.13](https://www.python.org/downloads/) on your machine, for the
+  virtual environment and to generate the keys for the `.env` file. ffmpeg does
+  not have to be installed, it is part of the Docker image.
+- A [Gemini API key](https://aistudio.google.com/apikey).
 
 The first build takes a while: the image contains PyTorch, and the Whisper model
 (about 460 MB, model `small`) is downloaded during the build, so the first quiz
@@ -52,11 +58,57 @@ Every command is run from the project root, the folder that contains
 ### 1. Get the code
 
 ```bash
-git clone <repository-url>
-cd quizly
+git clone https://github.com/calvin-kamp/quizly-backend.git
+cd quizly-backend
 ```
 
-### 2. Create the `.env` file
+### 2. Create the virtual environment
+
+```bash
+python -m venv .venv
+```
+
+On macOS and Linux the command may be `python3` instead of `python`.
+
+Activate the environment:
+
+**Windows (PowerShell)**
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+If PowerShell blocks the script, allow it for the current window only and run the
+line above again:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+**macOS / Linux**
+
+```bash
+source .venv/bin/activate
+```
+
+The prompt now starts with `(.venv)`. Activate the environment again in every new
+terminal.
+
+Installing the dependencies is only needed if your editor should resolve the
+imports; the API itself always runs in the container:
+
+```bash
+pip install -r requirements.txt
+```
+
+On Linux, install the CPU version of PyTorch first, otherwise pip downloads
+several GB of GPU libraries:
+
+```bash
+pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu
+```
+
+### 3. Create the `.env` file
 
 Copy the template:
 
@@ -72,7 +124,8 @@ Copy-Item .env.template .env
 cp .env.template .env
 ```
 
-Generate two random strings, one for `SECRET_KEY` and one for `JWT_SIGNING_KEY`:
+Generate two random strings, one for `SECRET_KEY` and one for `JWT_SIGNING_KEY`
+(with the activated virtual environment):
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(50))"
@@ -112,7 +165,7 @@ including protocol and port.
 
 The server will not start without a `SECRET_KEY`.
 
-### 3. Build and start the containers
+### 4. Build and start the containers
 
 ```bash
 docker compose up --build
@@ -126,7 +179,7 @@ run by hand.
 
 The API is now available at `http://localhost:8000/api/`.
 
-### 4. Create an admin account
+### 5. Create an admin account
 
 ```bash
 docker compose exec api python manage.py createsuperuser
@@ -134,7 +187,7 @@ docker compose exec api python manage.py createsuperuser
 
 The account is reachable at `http://localhost:8000/admin/`.
 
-### 5. Check that it works
+### 6. Check that it works
 
 ```bash
 curl -X POST http://localhost:8000/api/register/ \
@@ -528,7 +581,7 @@ docker compose exec api python manage.py test app_auth.tests.test_login.LoginTes
 ## Troubleshooting
 
 **`django.core.exceptions.ImproperlyConfigured: Set the SECRET_KEY environment
-variable`** — the `.env` file is missing or has no `SECRET_KEY`. See step 2.
+variable`** — the `.env` file is missing or has no `SECRET_KEY`. See step 3.
 
 **The container stops right after the start** — run `docker compose logs api`.
 Compare the `.env` with `.env.template` if a variable is missing. If the database
