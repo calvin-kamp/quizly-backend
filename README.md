@@ -52,7 +52,7 @@ Every command is run from the project root, the folder that contains
 ### 1. Get the code
 
 ```bash
-git clone <repository-url>https://github.com/calvin-kamp/quizly-backend
+git clone https://github.com/calvin-kamp/quizly-backend
 cd quizly
 ```
 
