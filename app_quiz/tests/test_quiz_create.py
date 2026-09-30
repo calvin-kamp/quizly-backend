@@ -24,7 +24,7 @@ class QuizCreateTests(APITestCase):
 
     def setUp(self):
         self.url = reverse("quiz-list")
-        self.valid_data = {"url": "https://www.youtube.com/watch?v=abc123"}
+        self.valid_data = {"url": "https://www.youtube.com/watch?v=vu3xGr-lNVI"}
         self.generated_quiz = {
             "title": "Test quiz",
             "description": "A short summary.",
@@ -75,6 +75,29 @@ class QuizCreateTests(APITestCase):
         self.assertIn("created_at", question)
         self.assertIn("updated_at", question)
 
+    def test_create_quiz_saves_standard_video_url(self):
+        video_urls = (
+            "https://youtu.be/vu3xGr-lNVI?si=abc",
+            "https://m.youtube.com/watch?v=vu3xGr-lNVI",
+            "https://youtube.com/watch?v=vu3xGr-lNVI&t=42s&list=PL123",
+            "https://www.youtube.com/shorts/vu3xGr-lNVI",
+        )
+
+        for video_url in video_urls:
+            with self.subTest(video_url=video_url):
+                response = self.client.post(
+                    self.url, {"url": video_url}, format="json"
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+                self.assertEqual(
+                    response.data["video_url"],
+                    "https://www.youtube.com/watch?v=vu3xGr-lNVI",
+                )
+                self.mocks["download"].assert_called_with(
+                    "https://www.youtube.com/watch?v=vu3xGr-lNVI"
+                )
+
     def test_create_quiz_without_login_returns_401(self):
         self.client.force_authenticate(None)
 
@@ -84,7 +107,13 @@ class QuizCreateTests(APITestCase):
         self.assertFalse(Quiz.objects.exists())
 
     def test_create_quiz_with_invalid_url_returns_400(self):
-        invalid_urls = ("https://example.com/video", "not-a-url", "")
+        invalid_urls = (
+            "https://example.com/video",
+            "https://www.youtube.com/",
+            "https://www.youtube.com/watch?v=short",
+            "not-a-url",
+            "",
+        )
 
         for url in invalid_urls:
             with self.subTest(url=url):

@@ -1,13 +1,9 @@
 """Serializers for quizzes and questions."""
 
-from urllib.parse import urlparse
-
 from rest_framework import serializers
 
 from app_quiz.models import Question, Quiz
-
-# Hostnames that are accepted as YouTube URLs.
-YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}
+from app_quiz.utils import normalize_youtube_url
 
 
 class QuestionSerializer(serializers.ModelSerializer):
@@ -49,7 +45,7 @@ class QuizSerializer(serializers.ModelSerializer):
 
 
 class QuizCreatedSerializer(QuizSerializer):
-    """A quiz as returned after creation, with the timestamps of its questions."""
+    """A quiz as returned after creation, with question timestamps."""
 
     questions = QuestionCreatedSerializer(many=True, read_only=True)
 
@@ -60,12 +56,19 @@ class QuizCreateSerializer(serializers.Serializer):
     url = serializers.URLField()
 
     def validate_url(self, value):
-        """Accept only URLs whose host is a YouTube domain.
+        """Accept only YouTube video URLs, stored in the standard form.
+
+        Returns:
+            The URL in the form ``https://www.youtube.com/watch?v=<id>``.
 
         Raises:
-            ValidationError: If the host is not one of ``YOUTUBE_HOSTS``.
+            ValidationError: If the URL is not the URL of a YouTube video.
         """
-        if urlparse(value).hostname not in YOUTUBE_HOSTS:
-            raise serializers.ValidationError("Only YouTube URLs are allowed.")
+        video_url = normalize_youtube_url(value)
 
-        return value
+        if video_url is None:
+            raise serializers.ValidationError(
+                "Only URLs of YouTube videos are allowed."
+            )
+
+        return video_url
