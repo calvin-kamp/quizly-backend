@@ -15,16 +15,12 @@ Django REST Framework API; a client application talks to it over HTTP.
 
 ## Table of contents
 
-- [Setup](#setup)
-  - [1. Get the code](#1-get-the-code)
-  - [2. Create the virtual environment](#2-create-the-virtual-environment)
-  - [3. Create the `.env` file](#3-create-the-env-file)
-  - [4. Build and start the containers](#4-build-and-start-the-containers)
-  - [5. Create an admin account](#5-create-an-admin-account)
-  - [6. Try the API](#6-try-the-api)
-- [Running in production](#running-in-production)
+- [Quick start](#quick-start)
+- [Try the API](#try-the-api)
+- [Admin panel](#admin-panel)
 - [Useful commands](#useful-commands)
-- [Environment variables](#environment-variables)
+- [Configuration](#configuration)
+- [Running in production](#running-in-production)
 - [Project layout](#project-layout)
 - [How a quiz is created](#how-a-quiz-is-created)
 - [Authentication](#authentication)
@@ -36,82 +32,21 @@ Django REST Framework API; a client application talks to it over HTTP.
 
 ---
 
-## Setup
+## Quick start
 
-You need:
+**Requirements:** [Docker](https://docs.docker.com/get-docker/) with Docker
+Compose v2 and a [Gemini API key](https://aistudio.google.com/apikey). ffmpeg is
+required as well, because Whisper needs it to read the audio. The Docker image
+already contains it, so nothing else has to be installed on your machine.
 
-- [Docker](https://docs.docker.com/get-docker/) with Docker Compose v2. The API
-  and the PostgreSQL database run in containers.
-- [Python 3.13](https://www.python.org/downloads/) on your machine, for the
-  virtual environment and to generate the keys for the `.env` file.
-- ffmpeg is required, because Whisper needs it to read the audio. The Docker
-  image installs it, so you do not have to install it on your machine.
-- A [Gemini API key](https://aistudio.google.com/apikey).
-
-The first build takes a while: the image contains PyTorch, and the Whisper model
-(about 460 MB, model `small`) is downloaded during the build, so the first quiz
-request does not have to fetch it. Whisper needs about 2 GB of memory while it
-transcribes.
-
-Every command is run from the project root, the folder that contains
-`manage.py`.
-
-### 1. Get the code
+Get the code:
 
 ```bash
 git clone https://github.com/calvin-kamp/quizly-backend.git
 cd quizly-backend
 ```
 
-### 2. Create the virtual environment
-
-```bash
-python -m venv .venv
-```
-
-On macOS and Linux the command may be `python3` instead of `python`.
-
-Activate the environment:
-
-**Windows (PowerShell)**
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-If PowerShell blocks the script, allow it for the current window only and run the
-line above again:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-```
-
-**macOS / Linux**
-
-```bash
-source .venv/bin/activate
-```
-
-The prompt now starts with `(.venv)`. Activate the environment again in every new
-terminal.
-
-Installing the dependencies is only needed if your editor should resolve the
-imports; the API itself always runs in the container:
-
-```bash
-pip install -r requirements.txt
-```
-
-On Linux, install the CPU version of PyTorch first, otherwise pip downloads
-several GB of GPU libraries:
-
-```bash
-pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu
-```
-
-### 3. Create the `.env` file
-
-Copy the template:
+Create the `.env` file from the template:
 
 **Windows (PowerShell)**
 
@@ -125,72 +60,34 @@ Copy-Item .env.template .env
 cp .env.template .env
 ```
 
-Generate two random strings, one for `SECRET_KEY` and one for `JWT_SIGNING_KEY`
-(with the activated virtual environment):
+Open `.env` and replace `YOUR_GEMINI_API_KEY` with your key. All other values of
+the template work for local development as they are, see
+[Configuration](#configuration).
 
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(50))"
-```
-
-A working development `.env` looks like this:
-
-```ini
-SECRET_KEY=your-generated-key
-DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
-
-CORS_ALLOWED_ORIGINS=http://localhost:5500,http://127.0.0.1:5500
-CSRF_TRUSTED_ORIGINS=
-
-JWT_SIGNING_KEY=your-second-generated-key
-AUTH_COOKIE_SECURE=False
-
-GEMINI_API_KEY=your-gemini-api-key
-
-POSTGRES_DB=quizly
-POSTGRES_USER=quizly
-POSTGRES_PASSWORD=choose-a-password
-DATABASE_URL=postgres://quizly:choose-a-password@db:5432/quizly
-```
-
-`AUTH_COOKIE_SECURE=False` is needed for local development over plain HTTP.
-Browsers do not send `Secure` cookies over HTTP, so with the default `True` every
-request after the login answers `401`.
-
-`DATABASE_URL` has to use the host `db` and the same user, password and database
-name as the `POSTGRES_*` values. If the password contains special characters such
-as `@` or `/`, URL-encode them there or choose a password without them.
-
-`CORS_ALLOWED_ORIGINS` has to contain the exact origin the client is served from,
-including protocol and port.
-
-The server will not start without a `SECRET_KEY`.
-
-### 4. Build and start the containers
+Build and start the containers:
 
 ```bash
 docker compose up --build
 ```
 
-`compose.override.yaml` is applied automatically. It starts Django's development
-server with auto-reload, mounts the project folder into the container and exposes
-the database on port `5432`. The migrations are part of the repository and are
-applied automatically when the container starts, so there is no database step to
-run by hand.
-
 The API is now available at `http://localhost:8000/api/`.
 
-### 5. Create an admin account
+The first build takes a while: the image contains PyTorch, and the Whisper model
+(about 460 MB, model `small`) is downloaded during the build, so the first quiz
+request does not have to fetch it. Whisper needs about 2 GB of memory while it
+transcribes. The migrations are part of the repository and are applied
+automatically when the container starts.
 
-```bash
-docker compose exec api python manage.py createsuperuser
-```
+`docker compose up` also applies `compose.override.yaml`: it starts Django's
+development server with auto-reload, mounts the project folder into the
+container and exposes the database on port `5432`.
 
-The account is reachable at `http://localhost:8000/admin/`. In the admin panel
-you can edit the users, the quizzes and the single questions of a quiz. New
-quizzes are created with the API, see the next step.
+Every command of this README is run from the project root, the folder that
+contains `manage.py`.
 
-### 6. Try the API
+---
+
+## Try the API
 
 Start with a registration, log in and create a quiz from a YouTube video. The
 login sets the tokens as cookies, so the following requests have to reuse them:
@@ -258,20 +155,17 @@ endpoints are described in the [API reference](#api-reference).
 
 ---
 
-## Running in production
+## Admin panel
+
+Create an account for the admin panel:
 
 ```bash
-docker compose -f compose.yaml up -d --build
+docker compose exec api python manage.py createsuperuser
 ```
 
-The `-f compose.yaml` flag skips the override file. The container then runs
-gunicorn with a request timeout of 600 seconds and collects the static files on
-start. Before deploying, set in `.env`:
-
-- `DEBUG=False`
-- `AUTH_COOKIE_SECURE=True` and serve the API over HTTPS
-- `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` to the real domains
-- new random values for `SECRET_KEY` and `JWT_SIGNING_KEY`
+The panel is reachable at `http://localhost:8000/admin/`. There you can edit the
+users, the quizzes and the single questions of a quiz. New quizzes are created
+with the API, see [Try the API](#try-the-api).
 
 ---
 
@@ -299,7 +193,12 @@ docker compose down -v
 
 ---
 
-## Environment variables
+## Configuration
+
+All settings are environment variables. They are set in the `.env` file, which
+is created from `.env.template` (see [Quick start](#quick-start)). The template
+lists every variable with a value that works for local development; the
+variables are explained here.
 
 | Variable               | Required | Example                          | Purpose                                                                           |
 | ---------------------- | -------- | -------------------------------- | --------------------------------------------------------------------------------- |
@@ -316,6 +215,42 @@ docker compose down -v
 | `POSTGRES_PASSWORD`    | yes      | `choose-a-password`              | Database password.                                                                |
 | `DATABASE_URL`         | yes      | `postgres://quizly:pw@db:5432/quizly` | Connection string. The host is `db` inside Docker.                           |
 
+`AUTH_COOKIE_SECURE=False` is needed for local development over plain HTTP.
+Browsers do not send `Secure` cookies over HTTP, so with the default `True` every
+request after the login answers `401`.
+
+`DATABASE_URL` has to use the host `db` and the same user, password and database
+name as the `POSTGRES_*` values. If the password contains special characters such
+as `@` or `/`, URL-encode them there or choose a password without them.
+
+`CORS_ALLOWED_ORIGINS` has to contain the exact origin the client is served from,
+including protocol and port.
+
+The server will not start without a `SECRET_KEY`.
+
+---
+
+## Running in production
+
+```bash
+docker compose -f compose.yaml up -d --build
+```
+
+The `-f compose.yaml` flag skips the override file. The container then runs
+gunicorn with a request timeout of 600 seconds and collects the static files on
+start. Before deploying, set in `.env`:
+
+- `DEBUG=False`
+- `AUTH_COOKIE_SECURE=True` and serve the API over HTTPS
+- `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` to the real domains
+- new random values for `SECRET_KEY` and `JWT_SIGNING_KEY`. The values of the
+  template are only meant for development. Generate a random value, once per
+  key, with (no local Python needed):
+
+```bash
+docker compose run --rm --no-deps --entrypoint python api -c "import secrets; print(secrets.token_urlsafe(50))"
+```
+
 ---
 
 ## Project layout
@@ -331,8 +266,9 @@ Both apps have a `tests/` package with the automated tests (see
 
 Each app keeps its API layer in a subpackage (`api/`) holding the serializers,
 views, permissions and URLs. `app_auth/api/authentication.py` reads the token
-from the cookie, `app_auth/utils.py` sets and deletes the auth cookies. The
-models of `app_quiz` are managed in the admin panel (`app_quiz/admin.py`). `app_quiz/services/` holds the steps of the quiz generation:
+from the cookie, `app_auth/utils.py` sets and deletes the auth cookies.
+`app_quiz/utils.py` converts YouTube URLs to the standard form, and the models of
+`app_quiz` are managed in the admin panel (`app_quiz/admin.py`). `app_quiz/services/` holds the steps of the quiz generation:
 
 ```
 services/
@@ -388,7 +324,7 @@ needs the refresh cookie). Everything else answers `401` without a valid access
 token.
 
 Postman keeps the cookies after the login. With curl (macOS / Linux), use a
-cookie file; for PowerShell see [6. Try the API](#6-try-the-api):
+cookie file; for PowerShell see [Try the API](#try-the-api):
 
 ```bash
 curl -c cookies.txt -X POST http://localhost:8000/api/login/ \
@@ -505,14 +441,18 @@ Response `200`:
 
 #### `POST /api/quizzes/`
 
-Creates a quiz from a YouTube video. Only YouTube URLs (`youtube.com`,
-`www.youtube.com`, `m.youtube.com`, `youtu.be`) are accepted. See
+Creates a quiz from a YouTube video. Only URLs of YouTube videos are accepted:
+`youtube.com/watch?v=...`, the mobile and short links (`m.youtube.com`,
+`youtu.be/...`), links with additional parameters and `shorts`, `embed` or `live`
+links. The URL is stored in the standard form
+`https://www.youtube.com/watch?v=<id>`, so the client can embed the video with
+`video_url` whichever form was sent. See
 [How a quiz is created](#how-a-quiz-is-created).
 
 Request:
 
 ```json
-{ "url": "https://www.youtube.com/watch?v=example" }
+{ "url": "https://youtu.be/vu3xGr-lNVI" }
 ```
 
 Response `201`: the quiz with all questions.
@@ -524,7 +464,7 @@ Response `201`: the quiz with all questions.
   "description": "Quiz Description",
   "created_at": "2026-09-29T12:34:56.789Z",
   "updated_at": "2026-09-29T12:34:56.789Z",
-  "video_url": "https://www.youtube.com/watch?v=example",
+  "video_url": "https://www.youtube.com/watch?v=vu3xGr-lNVI",
   "questions": [
     {
       "id": 1,
@@ -538,8 +478,8 @@ Response `201`: the quiz with all questions.
 }
 ```
 
-`400` for an invalid URL, a URL that is not a YouTube URL or a video that cannot
-be downloaded. `401` without a token. `500` when the generation fails, for
+`400` for an invalid URL, a URL that is not the URL of a YouTube video or a video
+that cannot be downloaded. `401` without a token. `500` when the generation fails, for
 example because of the Gemini API.
 
 #### `GET /api/quizzes/`
@@ -554,7 +494,7 @@ All quizzes of the logged-in user, newest first. Not paginated.
     "description": "Quiz Description",
     "created_at": "2026-09-29T12:34:56.789Z",
     "updated_at": "2026-09-29T12:34:56.789Z",
-    "video_url": "https://www.youtube.com/watch?v=example",
+    "video_url": "https://www.youtube.com/watch?v=vu3xGr-lNVI",
     "questions": [
       {
         "id": 1,
@@ -632,10 +572,11 @@ docker compose exec api python manage.py test app_auth.tests.test_login.LoginTes
 | `app_auth/tests/test_login.py`       | Login: cookies (set, `HttpOnly`, lifetime), no tokens in the body, wrong or missing credentials, inactive user, access to a protected endpoint |
 | `app_auth/tests/test_logout.py`      | Logout: cookies are deleted, the refresh token is blacklisted, works without cookies         |
 | `app_auth/tests/test_token_refresh.py` | Token refresh: new access cookie, missing or invalid refresh cookie                        |
-| `app_quiz/tests/test_quiz_create.py` | Quiz creation: result and questions, invalid URL, failed download, login required            |
+| `app_quiz/tests/test_quiz_create.py` | Quiz creation: result and questions, invalid URL, standard video URL, failed download, login required |
 | `app_quiz/tests/test_quiz_list.py`   | Quiz list: only the quizzes of the logged-in user                                            |
 | `app_quiz/tests/test_quiz_detail.py` | Reading, changing and deleting a quiz, including the owner check (403) and the 404 case      |
 | `app_quiz/tests/test_quiz_creator.py`| The quiz pipeline: saved data, cleanup of the audio file, errors leave nothing behind        |
+| `app_quiz/tests/test_utils.py`       | Conversion of YouTube URLs (short, mobile, `shorts`, extra parameters) to the standard form |
 | `app_quiz/tests/test_admin.py`       | Admin panel: quizzes and questions are listed and can be changed, questions appear on the quiz page |
 
 ---
@@ -643,7 +584,8 @@ docker compose exec api python manage.py test app_auth.tests.test_login.LoginTes
 ## Troubleshooting
 
 **`django.core.exceptions.ImproperlyConfigured: Set the SECRET_KEY environment
-variable`** — the `.env` file is missing or has no `SECRET_KEY`. See step 3.
+variable`** — the `.env` file is missing or has no `SECRET_KEY`. See
+[Quick start](#quick-start).
 
 **The container stops right after the start** — run `docker compose logs api`.
 Compare the `.env` with `.env.template` if a variable is missing. If the database
